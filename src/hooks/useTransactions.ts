@@ -17,6 +17,38 @@ const useTransactions = () => {
     setLoading(false);
   }, []);
 
+  const drainSyncQueue = useCallback(async () => {
+    const queue = await db.syncQueue.toArray();
+    if (queue.length === 0) return;
+
+    for (const item of queue) {
+      if (item.operation !== "create") continue;
+
+      try {
+        const payload = JSON.parse(item.payload);
+        const res = await fetch("/api/transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          const saved = await res.json();
+          const now = new Date().toISOString();
+          await db.transactions.update(item.transactionLocalId, {
+            id: saved.id,
+            syncedAt: now,
+          });
+          await db.syncQueue.delete(item.id!);
+        }
+      } catch {
+        // Ainda offline ou erro de rede — tenta no próximo ciclo
+      }
+    }
+
+    await loadFromIndexedDB();
+  }, [loadFromIndexedDB]);
+
   const syncFromServer = useCallback(async () => {
     try {
       const res = await fetch("/api/transactions?limit=100");
@@ -131,9 +163,9 @@ const useTransactions = () => {
 
   useEffect(() => {
     if (isOnline) {
-      syncFromServer();
+      drainSyncQueue().then(() => syncFromServer());
     }
-  }, [isOnline, syncFromServer]);
+  }, [isOnline, drainSyncQueue, syncFromServer]);
 
   return { transactions, loading, addTransaction, refresh: syncFromServer };
 };
