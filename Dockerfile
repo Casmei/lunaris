@@ -31,8 +31,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Full node_modules so prisma CLI has all transitive deps (e.g. valibot)
 COPY --from=deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 
-# Prisma schema, migrations and generated client
+# Prisma schema, config, migrations and generated client
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
 
 USER nextjs
